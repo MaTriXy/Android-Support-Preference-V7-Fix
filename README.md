@@ -1,4 +1,4 @@
-# Currently this is the available bugfix (*support library rev. 23.0.1*)
+# Currently this is the available bugfix (*support library rev. 23.2.0*)
 So, Google gives us a solution which I think is not ideal but works. According to this, instead of using
 
 ```xml
@@ -11,7 +11,53 @@ one should use
 <item name="preferenceTheme">@style/PreferenceThemeOverlay.v14.Material</item>
 ```
 
-This also means that even though you are using only v7, you have to include the v14 lib as well because the said `PreferenceThemeOverlay.v14.Material` is only available in it.
+This also means that even though you are using only v7, you have to include the v14 lib as well because the said `PreferenceThemeOverlay.v14.Material` is only available in it. ~~Since v14 requires your min SDK to be set to 14 or higher, you can't use this workaround if you are also targeting devices below this level.~~
+
+### Quick fix to enable the lib on devices below 14
+
+First of all, create a separate `styles.xml` for devices 7+ and another one for 14+ (*and probably you can create for 21+, etc.*).
+
+The v14 (and up) will still use the v14 material themed preference theme (`@style/PreferenceThemeOverlay.v14.Material`) with the method shown above.
+
+For the v7, we have to set the preference theme to the original one:
+```xml
+<item name="preferenceTheme">@style/PreferenceThemeOverlay</item>
+```
+
+This way the normal (*actually a little materialized*) preference theme will be used on devices 7-13 and the material one on devices 14 and up. Since the v14 lib requires the min SDK to be set to 14 or higher, we have to use an **Android Studio recommended hack**: we will override the library's requirements. To do this, you have to add the following line to your manifest:
+
+```xml
+<uses-sdk xmlns:tools="http://schemas.android.com/tools"
+        tools:overrideLibrary="android.support.v14.preference" />
+```
+
+Now the build will succeed. If you check the design on a 7+ device, you'll probably see that the preference categories' design looks really bad. To fix this, include the following lines in your default (*or v7, whichever you chose*) `styles.xml`:
+
+```xml
+<style name="Theme.MyTheme.ListSeparatorTextView">
+    <item name="android:textSize">14sp</item>
+    <item name="android:textStyle">bold</item>
+    <item name="android:textColor">@color/accent</item>
+    <item name="android:paddingTop">16dp</item>
+    <item name="android:layout_marginBottom">16dp</item>
+</style>
+```
+
+Then apply the just created style to your main theme by adding the following line to it:
+
+```xml
+<item name="android:listSeparatorTextViewStyle">@style/Theme.MyTheme.ListSeparatorTextView</item>
+```
+
+Basically it overrides the built-in `listSeparatorTextViewStyle`, which is the style of the preference category's `TextView`, to make it better looking.
+
+#### That's it, now you can use the support lib on API 7+ without sacrificing the material styles on devices on or above level 14.
+
+> **There are some bugs(?) though:**
+ - The whole preference list has a left-right padding which could be removed by effectively overriding all the preference layouts with custom ones that contain the padding inside the layouts instead of applying it on the list itself.
+ - The text sizes (especially the titles') look too big. To overcome this, you can override the `android:textAppearanceLarge` (*titles*) and `android:textAppearanceSmall` (*summaries*) in your theme file but if you do so, you might make other parts of your app look bad, so test it thoroughly.
+
+---
 
 **Another bug** is that on API levels below 21 the PreferenceCategory elements' text color is not the accent color you define in your style. To set it to your accent color, you have to define a `preference_fallback_accent_color` color value in any of your resources files. Example:
 
@@ -23,7 +69,9 @@ This also means that even though you are using only v7, you have to include the 
 </resources>
 ```
 
-**And another bug** is that the PreferenceCategory's text style is *italic* instead of **bold**. In order to fix this, you have to re-define a so-called `Preference_TextAppearanceMaterialBody2` style (this is used by the PreferenceCategory below API level 21) in any of your styles file:
+> **NOTE** that this solution only provides a fix if you need only one color (e.g. you don't have multiple themes with different colors). In case you want to define more themes, head to the **Interesting things** part where you can find a solution for this problem.
+
+**And another bug** is that the PreferenceCategory's text style ~~is *italic* instead of **bold**~~ is not bold. In order to fix this, you have to re-define a so-called `Preference_TextAppearanceMaterialBody2` style (this is used by the PreferenceCategory below API level 21) in any of your styles file:
 
 ```xml
 <style name="Preference_TextAppearanceMaterialBody2">
@@ -33,14 +81,6 @@ This also means that even though you are using only v7, you have to include the 
     <item name="android:textColor">?android:attr/textColorPrimary</item>
 </style>
 ```
-
-**And one more bug** is that `PreferenceThemeOverlay.v14.Material` has no correct background selector. To overcome this, you should add the following line to your main theme style:
-
-```xml
-<item name="android:activatedBackgroundIndicator">?android:attr/selectableItemBackground</item>
-```
-
-*Note that I did not test this background-fixer solution extensively so it might mess up other parts of your app. This is just a temporary (i.e. experimental) bugfix until Google releases either a less buggy version of the lib or the source code so we could fix it.*
 
 **And another bug (*officially it isn't*)** is that you cannot set any `EditText`-related attributes (e.g. `inputType`) to your `EditTextPreference`. If you still want to do that, scroll down a little, the workaround is in the **Interesting things** part.
 
@@ -92,23 +132,67 @@ EditTextPreferenceFix etPref = (EditTextPreferenceFix) findPreference("edit_text
 int inputType = etPref.getEditText().getInputType();
 ```
 
-# Known bugs that cannot be fixed
-- When a Preference's dialog is showing and the device's orientation changes, the app crashes. [Bug report](https://code.google.com/p/android/issues/detail?id=186160)
+### Using multiple themes and setting the categories' accent color
+As I mentioned in the bugs section, setting the `preference_fallback_accent_color` is good only if you need just a single theme.
+
+This is not ideal for some programmers, so I created a new `PreferenceCategoryFix` class which overcomes this *accent color problem* by retrieving the `colorAccent` attribute from the theme and applying it to the `TextView` which is used in the category. This class is located in the `android.support.v7.preference` package in order to make it easier to use in your settings.xml (*or whatever you call it*).
+
+In your preference XML, use `PreferenceCategoryFix` instead of `PreferenceCategory` (*again, note the __Fix__ ending*):
+```xml
+<PreferenceCategoryFix android:title="EditTextPreferenceFix">
+        <!-- your preferences go here -->
+</PreferenceCategoryFix>
+```
+
+*I recommend using the normal `PreferenceCategory` version first as it provides auto-complete for the attributes, and adding the __Fix__ ending when you're testing / releasing the app.*
+
+> **NOTE** that you have to use the AppCompat theme (`Theme.AppCompat`, `Theme.AppCompat.Light`, etc.) as your theme's parent, otherwise you will get a runtime error.
+
+> **DON'T FORGET** to add the `PreferenceCategoryFix` class to your ProGuard file otherwise it may strip it.
+
+# Fixed bugs
+
+**And one more bug** is that `PreferenceThemeOverlay.v14.Material` has no correct background selector. To overcome this, you should add the following line to your main theme style:
+
+```xml
+<item name="android:activatedBackgroundIndicator">?android:attr/selectableItemBackground</item>
+```
+
+*Note that I did not test this background-fixer solution extensively so it might mess up other parts of your app. This is just a temporary (i.e. experimental) bugfix until Google releases either a less buggy version of the lib or the source code so we could fix it.*
+> since 23.1.0
+
+---
+
+**And one more bug** is that on pre-lollipop devices the Preference items' title is just too big (*compared to the ones seen on API 21+*). To fix this problem, add the following line to your main theme style:
+
+```xml
+<item name="android:textAppearanceListItem">@style/TextAppearance.AppCompat.Subhead</item>
+```
+
+*Note that this could mess up other parts of your app because the `textAppearanceListItem` is a global attribute, so you should test your app thoroughly after applying this fix.*
+> since 23.1.0
+
+---
+
+**No dividers bugfix** is now available. Dividers are enabled by default since support library v23.2.0.
+~~If you want to disable them, call `enableDividers(false)` from your code. (*I added this new method to `PreferenceFragmentCompatFix` so make sure you use that instead of `PreferenceFragmentCompat`.*)~~
+> since 23.1.1
+
+---
+
+**A new bugfix** is that the app won't crash anymore if a Preference's dialog is showing and the device's orientation changes.
+> since 23.2.0
 
 # Android-Support-Preference-V7-Fix
 ~~Android preference-v7 support library doesn't contain material design layout files so the preferences screen looks bad on API 21+. This is a temporary fix until Google fixes it.~~
 
-The latest (23.0.1) preference-v7 support library has some other issues, see above.
+The latest (23.2.0) preference-v7 support library has some other issues, see above.
 
 The issue has been reported, you can find it here:
 https://code.google.com/p/android/issues/detail?id=183376
 
 # Prerequisites #
-This demo / bugfix is set to work on API level 16+.
+This demo / bugfix is set to work on API level 7+.
 
 # License notes #
-You can do whatever you want except where noted, especially the following files downloaded from the [Android framework base](https://github.com/android/platform_frameworks_base/tree/master/core/res/res/layout) (these are also modified):
- - preference_category_material_custom.xml
- - preference_dialog_edittext_material_custom.xml
- - preference_information_material_custom.xml
- - preference_material_custom.xml
+You can do whatever you want except where noted.
