@@ -1,198 +1,244 @@
-# Currently this is the available bugfix (*support library rev. 23.2.0*)
-So, Google gives us a solution which I think is not ideal but works. According to this, instead of using
+# Android Support library - preference v7 bugfix
 
-```xml
-<item name="preferenceTheme">@style/PreferenceThemeOverlay</item>
-```
+> **BREAKING CHANGE** in 26.1.0.3: The custom attribute names for extra preference types use `pref_` prefix in order to avoid name collision with other libraries. See the changelog for more details.
 
-one should use
+This library is meant to fix some of the problems found in the official support preference-v7 library. Also, there are [new preference types](#extra-types) available, such as `RingtonePreference`, `DatePickerPreference`, and `TimePickerPreference`.
 
-```xml
-<item name="preferenceTheme">@style/PreferenceThemeOverlay.v14.Material</item>
-```
+Support Library (28.0.0):
+[ ![Download](https://api.bintray.com/packages/gericop/maven/com.takisoft.fix%3Apreference-v7/images/download.svg) ](https://bintray.com/gericop/maven/com.takisoft.fix%3Apreference-v7/_latestVersion)
 
-This also means that even though you are using only v7, you have to include the v14 lib as well because the said `PreferenceThemeOverlay.v14.Material` is only available in it. ~~Since v14 requires your min SDK to be set to 14 or higher, you can't use this workaround if you are also targeting devices below this level.~~
+AndroidX (1.0.0-beta01):
+[ ![Download](https://api.bintray.com/packages/takisoft/android/com.takisoft.preferencex%3Apreferencex/images/download.svg) ](https://bintray.com/takisoft/android/com.takisoft.preferencex%3Apreferencex/_latestVersion)
+> Check out the other available AndroidX artifacts at https://bintray.com/takisoft/android)
 
-### Quick fix to enable the lib on devices below 14
+### Donation
 
-First of all, create a separate `styles.xml` for devices 7+ and another one for 14+ (*and probably you can create for 21+, etc.*).
+If you would like to support me, you may donate some small amount via PayPal.
 
-The v14 (and up) will still use the v14 material themed preference theme (`@style/PreferenceThemeOverlay.v14.Material`) with the method shown above.
-
-For the v7, we have to set the preference theme to the original one:
-```xml
-<item name="preferenceTheme">@style/PreferenceThemeOverlay</item>
-```
-
-This way the normal (*actually a little materialized*) preference theme will be used on devices 7-13 and the material one on devices 14 and up. Since the v14 lib requires the min SDK to be set to 14 or higher, we have to use an **Android Studio recommended hack**: we will override the library's requirements. To do this, you have to add the following line to your manifest:
-
-```xml
-<uses-sdk xmlns:tools="http://schemas.android.com/tools"
-        tools:overrideLibrary="android.support.v14.preference" />
-```
-
-Now the build will succeed. If you check the design on a 7+ device, you'll probably see that the preference categories' design looks really bad. To fix this, include the following lines in your default (*or v7, whichever you chose*) `styles.xml`:
-
-```xml
-<style name="Theme.MyTheme.ListSeparatorTextView">
-    <item name="android:textSize">14sp</item>
-    <item name="android:textStyle">bold</item>
-    <item name="android:textColor">@color/accent</item>
-    <item name="android:paddingTop">16dp</item>
-    <item name="android:layout_marginBottom">16dp</item>
-</style>
-```
-
-Then apply the just created style to your main theme by adding the following line to it:
-
-```xml
-<item name="android:listSeparatorTextViewStyle">@style/Theme.MyTheme.ListSeparatorTextView</item>
-```
-
-Basically it overrides the built-in `listSeparatorTextViewStyle`, which is the style of the preference category's `TextView`, to make it better looking.
-
-#### That's it, now you can use the support lib on API 7+ without sacrificing the material styles on devices on or above level 14.
-
-> **There are some bugs(?) though:**
- - The whole preference list has a left-right padding which could be removed by effectively overriding all the preference layouts with custom ones that contain the padding inside the layouts instead of applying it on the list itself.
- - The text sizes (especially the titles') look too big. To overcome this, you can override the `android:textAppearanceLarge` (*titles*) and `android:textAppearanceSmall` (*summaries*) in your theme file but if you do so, you might make other parts of your app look bad, so test it thoroughly.
+[ ![Buy me a coffee](https://raw.githubusercontent.com/Gericop/Android-Support-Preference-V7-Fix/master/images/donate.png)](https://www.paypal.me/korossyg/0eur)
 
 ---
 
-**Another bug** is that on API levels below 21 the PreferenceCategory elements' text color is not the accent color you define in your style. To set it to your accent color, you have to define a `preference_fallback_accent_color` color value in any of your resources files. Example:
+## How to use the library?
+### 1. Add gradle dependency
+First, **remove** the unnecessary lines of preference-v7 and preference-v14 from your gradle file as the bugfix contains both of them:
+```gradle
+implementation 'com.android.support:preference-v7:28.0.0'
+implementation 'com.android.support:preference-v14:28.0.0'
+```
+And **add** this single line to your gradle file:
+```gradle
+implementation 'com.takisoft.fix:preference-v7:28.0.0.0'
+```
+> Notice the versioning: the first three numbers are *always* the same as the latest official library while the last number is for own updates. I try to keep it up-to-date but if, for whatever reasons, I wouldn't notice the new support library versions, just issue a ticket.
 
-```xml
-<resources>
-    <color name="accent">#FF4081</color>
-    <!-- this is needed as preference_category_material layout uses this color as the text color -->
-    <color name="preference_fallback_accent_color">@color/accent</color>
-</resources>
+### 2. Use the appropriate class as your fragment's base
+You can use either `PreferenceFragmentCompat` or `PreferenceFragmentCompatDividers`. The former is the fixed version of the original fragment while the latter is an extended one where you can set the dividers using the divider flags. The `PreferenceFragmentCompatDividers` is the recommended approach as it uses the updated Material Design guidelines to create the appropriate divider config.
+
+#### Option 1 - `PreferenceFragmentCompat`
+```java
+import com.takisoft.fix.support.v7.preference.PreferenceFragmentCompat;
+
+public class MyPreferenceFragment extends PreferenceFragmentCompat {
+
+    @Override
+    public void onCreatePreferencesFix(@Nullable Bundle savedInstanceState, String rootKey) {
+        setPreferencesFromResource(R.xml.settings, rootKey);
+	
+	// additional setup
+    }
+}
+```
+> **Warning!** Watch out for the correct package name when importing `PreferenceFragmentCompat`, it should come from `com.takisoft.fix.support.v7.preference`.
+---
+#### Option 2 - `PreferenceFragmentCompatDividers`
+> **Warning!** `PreferenceFragmentCompatDividers` is deprecated and will be removed from the AndroidX version of the lib. You should use `PreferenceFragmentCompat` instead.
+```java
+import com.takisoft.fix.support.v7.preference.PreferenceFragmentCompatDividers;
+
+public class MyPreferenceFragment extends PreferenceFragmentCompatDividers {
+
+    @Override
+    public void onCreatePreferencesFix(@Nullable Bundle savedInstanceState, String rootKey) {
+        setPreferencesFromResource(R.xml.settings, rootKey);
+
+	// additional setup
+    }
+
+    @Override
+    public View onCreateView(LayoutInflater inflater, ViewGroup container, @Nullable Bundle savedInstanceState) {
+        try {
+            return super.onCreateView(inflater, container, savedInstanceState);
+        } finally {
+            setDividerPreferences(DIVIDER_PADDING_CHILD | DIVIDER_CATEGORY_AFTER_LAST | DIVIDER_CATEGORY_BETWEEN);
+        }
+    }
+}
 ```
 
-> **NOTE** that this solution only provides a fix if you need only one color (e.g. you don't have multiple themes with different colors). In case you want to define more themes, head to the **Interesting things** part where you can find a solution for this problem.
-
-**And another bug** is that the PreferenceCategory's text style ~~is *italic* instead of **bold**~~ is not bold. In order to fix this, you have to re-define a so-called `Preference_TextAppearanceMaterialBody2` style (this is used by the PreferenceCategory below API level 21) in any of your styles file:
-
+### 3. Use the appropriate theme
+You should set your containing `Activity`'s theme to either a variant of `@style/PreferenceFixTheme` or create your own and use it as the parent theme. `PreferenceFixTheme` is based on `Theme.AppCompat` and contains the required attribute `preferenceTheme`. The fix theme is available for all `Theme.AppCompat` variants, such as `NoActionBar`, `Light`, etc.
+For example, the sample app uses `PreferenceFixTheme.Light.NoActionBar` as the parent theme:
 ```xml
-<style name="Preference_TextAppearanceMaterialBody2">
-    <item name="android:textSize">14sp</item>
-    <item name="android:fontFamily">sans-serif-medium</item>
-    <item name="android:textStyle">bold</item>
-    <item name="android:textColor">?android:attr/textColorPrimary</item>
+<style name="Theme.MyTheme" parent="@style/PreferenceFixTheme.Light.NoActionBar">
+    <item name="colorAccent">@color/accent</item>
+    <item name="colorPrimary">@color/primary</item>
+    <item name="colorPrimaryDark">@color/primary_dark</item>
+    <!-- [...] -->
 </style>
 ```
 
-**And another bug (*officially it isn't*)** is that you cannot set any `EditText`-related attributes (e.g. `inputType`) to your `EditTextPreference`. If you still want to do that, scroll down a little, the workaround is in the **Interesting things** part.
-
-# Interesting things
-These are not considered bugs but they can give you a headache.
-
-### Creating Preference programmatically
-When you create a `Preference`, you have to pass a context to its constructor. When you pass context by calling `getActivity()` or `getContext()` on your `PreferenceFragmentCompat`, you give the newly created `Preference` a context which is not styled with your `preferenceTheme` but your Activity's main theme. To pass the right context object, you have to do this:
-
-```java
-Context ctx = getPreferenceManager().getContext();
-
-Preference preference = new Preference(ctx);
-// setup your preference and add it to a category or the preference screen
-```
-And voilà, now your `preference` instance is material styled (*or whatever style you set as your `preferenceTheme`'s `preferenceStyle`*).
-
-### Setting `InputType` and other `EditText`-related attributes on EditTextPreference
-`EditTextPreference` doesn't forward XML attributes that should influence the input type or other aspects of the shown `EditText`. The [official statement](https://code.google.com/p/android/issues/detail?id=185164) is that this is *not a bug*, but I think it's a serious design flaw. Anyways, after a few hours getting through the decompiled source, I came up with a solution that works for now.
-
-I introduced 3 new (*fix*) classes:
-
-- **`EditTextPreferenceFix`** replacing `EditTextPreference` (in your XML too)
-- **`EditTextPreferenceDialogFragmentCompatFix`** replacing `EditTextPreferenceDialogFragmentCompat`, you won't interact with it, just needed for the fixed experience
-- **`PreferenceFragmentCompatFix`** replacing `PreferenceFragmentCompat` as the base class of `MyPreferenceFragment`
-
-You need a few updates to utilize this fix.
-
-Update `MyPreferenceFragment`'s base class to `PreferenceFragmentCompatFix` (*note the __Fix__ ending*):
-```java
-public class MyPreferenceFragment extends PreferenceFragmentCompatFix { /* ... */ }
+**Theme.MaterialComponents**
+There's a NEW module called `preference-v7-material` that provides the new `Theme.MaterialComponents` related themes. You can add it to your project like this:
+```gradle
+implementation 'com.takisoft.fix:preference-v7-material:28.0.0.0'
 ```
 
-In your preference XML, use `EditTextPreferenceFix` instead of `EditTextPreference` (*again, note the __Fix__ ending*):
+> Note that you may need to use multidexing after this because it uses the support design library which is a huge codebase.
+
+### 4. That's it!
+Now you can enjoy using the support preferences API without losing all your hair.
+
+---
+
+## Extra types
+
+There are additional preferences not part of the official support library, but decided to add them to some extra libraries. You can add all of them to your project using
+
+```gradle
+implementation 'com.takisoft.fix:preference-v7-extras:28.0.0.0'
+```
+
+or one or more groups:
+
+Preference | Dependency | Preview
+-|-|-
+[`RingtonePreference`](https://github.com/Gericop/Android-Support-Preference-V7-Fix/wiki/Preference-types#ringtonepreference) | `compile 'com.takisoft.fix:preference-v7-ringtone:28.0.0.0'` | ![API 26](https://raw.githubusercontent.com/Gericop/Android-Support-Preference-V7-Fix/master/images/ringtone_api26.png)
+[`DatePickerPreference`](https://github.com/Gericop/Android-Support-Preference-V7-Fix/wiki/Preference-types#datepickerpreference) | `compile 'com.takisoft.fix:preference-v7-datetimepicker:28.0.0.0'` | ![API 26](https://raw.githubusercontent.com/Gericop/Android-Support-Preference-V7-Fix/master/images/datepicker_api26.png)
+[`TimePickerPreference`](https://github.com/Gericop/Android-Support-Preference-V7-Fix/wiki/Preference-types#timepickerpreference) | `compile 'com.takisoft.fix:preference-v7-datetimepicker:28.0.0.0'` | ![API 26](https://raw.githubusercontent.com/Gericop/Android-Support-Preference-V7-Fix/master/images/timepicker_api26.png)
+[`ColorPickerPreference`](https://github.com/Gericop/Android-Support-Preference-V7-Fix/wiki/Preference-types#colorpickerpreference) | `compile 'com.takisoft.fix:preference-v7-colorpicker:28.0.0.0'` | ![API 26](https://raw.githubusercontent.com/Gericop/Android-Support-Preference-V7-Fix/master/images/colorpicker_api26_fixed.png)
+[`SimpleMenuPreference`](https://github.com/Gericop/Android-Support-Preference-V7-Fix/wiki/Preference-types#simplemenupreference) | `compile 'com.takisoft.fix:preference-v7-simplemenu:28.0.0.0'` | ![API 26](https://raw.githubusercontent.com/Gericop/Android-Support-Preference-V7-Fix/master/images/simplemenu_api26.png)
+
+---
+
+## Custom solutions
+### Dividers
+If you use `PreferenceFragmentCompatDividers` as your base class for the preference fragment, you can use 3 new methods to customize the dividers:
+- `setDivider(Drawable drawable)`: Sets a custom `Drawable` as the divider.
+- `setDividerHeight(int height)`: Sets the height of the drawable; useful for XML resources.
+- `setDividerPreferences(int flags)`: Sets where the dividers should appear. Check the documentation of the method for more details about the available flags.
+
+### Hijacked `EditTextPreference`
+The support implementation of `EditTextPreference` ignores many of the basic yet very important attributes as it doesn't forward them to the underlying `EditText` widget. In my opinion this is a result of some twisted thinking which would require someone to create custom dialog layouts for some simple tasks, like showing a numbers-only dialog. This is the main reason why the `EditTextPreference` gets hijacked by this lib: it replaces certain aspects of the original class in order to forward all the XML attributes set (such as `inputType`) on the `EditTextPreference` to the `EditText`, and also provides a `getEditText()` method so it can be manipulated directly.
+
+The sample app shows an example of setting (via XML) and querying (programmatically) the input type of the `EditTextPreference`:
 ```xml
-<EditTextPreferenceFix
+<EditTextPreference
     android:inputType="phone"
-    android:key="edit_text_fix_test"
-    android:persistent="false"
-    android:summary="It's an input for phone numbers only"
-    android:title="EditTextPreferenceFix" />
+    android:key="edit_text_test" />
 ```
 
-*I recommend using the normal `EditTextPreference` version first as it provides auto-complete for the attributes, and adding the __Fix__ ending when you're testing / releasing the app.*
-
-If you use `EditTextPreferenceFix`, you can also access the shown `EditText` by calling the preference's `getEditText()` method. Example:
 ```java
-EditTextPreferenceFix etPref = (EditTextPreferenceFix) findPreference("edit_text_fix_test");
-int inputType = etPref.getEditText().getInputType();
+EditTextPreference etPref = (EditTextPreference) findPreference("edit_text_test");
+if (etPref != null) {
+    int inputType = etPref.getEditText().getInputType();
+    // do something with inputType
+}
 ```
+> **Note!** Watch out for the correct package name when importing `EditTextPreference`, it should come from `com.takisoft.fix.support.v7.preference`. If you import from the wrong package (i.e. `android.support.v7.preference`), the `getEditText()` method will not be available, however, the XML attributes will still be forwarded and processed by the `EditText`.
 
-### Using multiple themes and setting the categories' accent color
-As I mentioned in the bugs section, setting the `preference_fallback_accent_color` is good only if you need just a single theme.
 
-This is not ideal for some programmers, so I created a new `PreferenceCategoryFix` class which overcomes this *accent color problem* by retrieving the `colorAccent` attribute from the theme and applying it to the `TextView` which is used in the category. This class is located in the `android.support.v7.preference` package in order to make it easier to use in your settings.xml (*or whatever you call it*).
-
-In your preference XML, use `PreferenceCategoryFix` instead of `PreferenceCategory` (*again, note the __Fix__ ending*):
+### PreferenceCategory's bottom margin reduce
+Some people found the preference category's bottom margin too big, so now you can change it from the styles by setting the `preferenceCategory_marginBottom` value in your theme, for example:
 ```xml
-<PreferenceCategoryFix android:title="EditTextPreferenceFix">
-        <!-- your preferences go here -->
-</PreferenceCategoryFix>
+<item name="preferenceCategory_marginBottom">0dp</item>
 ```
 
-*I recommend using the normal `PreferenceCategory` version first as it provides auto-complete for the attributes, and adding the __Fix__ ending when you're testing / releasing the app.*
-
-> **NOTE** that you have to use the AppCompat theme (`Theme.AppCompat`, `Theme.AppCompat.Light`, etc.) as your theme's parent, otherwise you will get a runtime error.
-
-> **DON'T FORGET** to add the `PreferenceCategoryFix` class to your ProGuard file otherwise it may strip it.
-
-# Fixed bugs
-
-**And one more bug** is that `PreferenceThemeOverlay.v14.Material` has no correct background selector. To overcome this, you should add the following line to your main theme style:
-
+### Preference dialog's message style
+The original implementation uses `?attr/textAppearanceSmall` as the message style in the popup dialog (the one you find when clicking on an `EditTextPreference` with a set `android:dialogMessage` attribute), but it seems really small and might be hard to read. In order to fix that, a new attribute has been introduced to the `PreferenceFixTheme`: `preferenceDialog_messageAppearance`. This attribute controls the appearance of the message in the dialog and is set to `@style/TextAppearance.AppCompat.Subhead` by default. If you wish to change this, you'll just have to add the following line to your theme:
 ```xml
-<item name="android:activatedBackgroundIndicator">?android:attr/selectableItemBackground</item>
+<item name="preferenceDialog_messageAppearance">@style/YourTextAppearance</item>
 ```
-
-*Note that I did not test this background-fixer solution extensively so it might mess up other parts of your app. This is just a temporary (i.e. experimental) bugfix until Google releases either a less buggy version of the lib or the source code so we could fix it.*
-> since 23.1.0
 
 ---
 
-**And one more bug** is that on pre-lollipop devices the Preference items' title is just too big (*compared to the ones seen on API 21+*). To fix this problem, add the following line to your main theme style:
+## Version
+The current stable version is **28.0.0.0**.
 
-```xml
-<item name="android:textAppearanceListItem">@style/TextAppearance.AppCompat.Subhead</item>
-```
-
-*Note that this could mess up other parts of your app because the `textAppearanceListItem` is a global attribute, so you should test your app thoroughly after applying this fix.*
-> since 23.1.0
+## Notes #
+This demo / bugfix is set to work on API level 14+.
 
 ---
 
-**No dividers bugfix** is now available. Dividers are enabled by default since support library v23.2.0.
-~~If you want to disable them, call `enableDividers(false)` from your code. (*I added this new method to `PreferenceFragmentCompatFix` so make sure you use that instead of `PreferenceFragmentCompat`.*)~~
-> since 23.1.1
+## Sample
+
+_Material design - everywhere._
+
+API 15 | API 21 | API 26
+-|-|-
+![API 15](https://raw.githubusercontent.com/Gericop/Android-Support-Preference-V7-Fix/master/images/base_api15.png) | ![API 21](https://raw.githubusercontent.com/Gericop/Android-Support-Preference-V7-Fix/master/images/base_api21.png) | ![API 26](https://raw.githubusercontent.com/Gericop/Android-Support-Preference-V7-Fix/master/images/base_api26.png)
 
 ---
 
-**A new bugfix** is that the app won't crash anymore if a Preference's dialog is showing and the device's orientation changes.
-> since 23.2.0
+### Changelog
 
-# Android-Support-Preference-V7-Fix
-~~Android preference-v7 support library doesn't contain material design layout files so the preferences screen looks bad on API 21+. This is a temporary fix until Google fixes it.~~
+**2018-09-24**
 
-The latest (23.2.0) preference-v7 support library has some other issues, see above.
+New version: 28.0.0.0 (based on v28.0.0)
 
-The issue has been reported, you can find it here:
-https://code.google.com/p/android/issues/detail?id=183376
+- No support preferences related changes in the support library.
+- Fixed issues #174 and #175
 
-# Prerequisites #
-This demo / bugfix is set to work on API level 7+.
+**2018-09-13**
+
+New version: 28.0.0.0-rc02 (based on v28.0.0-rc02)
+
+- No support preferences related changes in the support library.
+
+**2018-09-13**
+
+New version: 28.0.0.0-rc01 (based on v28.0.0-rc01)
+
+- Official lib bug fixes
+  - `PreferenceThemeOverlay` has been updated to the latest material theme. If no custom theme is provided, `PreferenceThemeOverlay` is used as the default theme.
+  - `PreferenceThemeOverlay.v14` and `PreferenceThemeOverlay.v14.Material` themes have been deprecated in favour of `PreferenceThemeOverlay`.
+  - `PreferenceGroup` visibility is now tied to its children - hiding a parent group will also prevent its children from being shown in the hierarchy. Use `Preference.isShown()` to get whether a `Preference` is actually displayed to the user in the hierarchy.
+  - `Preference.onSetInitialValue(boolean, Object)` has been deprecated and replaced with `onSetInitialValue(Object)`. PreferenceDataStore now also correctly restores default values.
+- added `onSetInitialValue(Object)` implementation and removed the deprecated `onSetInitialValue(boolean, Object)`
+
+**2018-07-18**
+
+New version: 28.0.0.0-alpha3 (based on v28.0.0-alpha3)
+
+- No support preferences related changes in the support library.
+- `PreferenceFragmentCompatDividers` is now deprecated. Use `PreferenceFragmentCompat` instead.
+- Added `preference-v7-material` module which provides `Theme.MaterialComponents` related themes.
+- Bug fixes #166, #169, #173
+
+**2018-07-04**
+
+New version: 27.1.1.2 (based on v27.1.1)
+
+- No support preferences related changes in the support library.
+- RingtonePreference bug fixes(#164, #165, #167).
+
+**2018-05-11**
+
+New version: 27.1.1.1 (based on v27.1.1)
+
+- No support preferences related changes in the support library.
+- Bug fixes (#153, #149, #155, #152).
+
+**2018-04-10**
+
+New version: 27.1.1.0 (based on v27.1.1)
+
+- No support preferences related changes in the support library.
+- Some bug fixes (see #147 for more info).
+
+> For older changelogs, check out the [CHANGELOG](CHANGELOG.md) file.
+
+Feel free to ask / suggest anything on this page by creating a ticket (*issues*)!
 
 # License notes #
 You can do whatever you want except where noted.
